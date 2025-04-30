@@ -25,7 +25,8 @@ jobs:
           rss_list = [
               ("https://www.thisiscolossal.com/feed?limit=3", "Art"),
               ("https://rsshub.app/zhubai/luzhnan?limit=3", "Newsletter"),
-              ("https://rsshub.app/zhubai/other_id?limit=2", "Tech")
+              ("https://rsshub.app/zhubai/other_id?limit=2", "Tech"),
+              ("https://daringfireball.net/feeds/json?limit=2", "Tech")
           ]
 
           for url, folder in rss_list:
