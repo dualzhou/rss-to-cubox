@@ -1,0 +1,49 @@
+name: RSS to Cubox
+on:
+  schedule:
+    - cron: "0 */3 * * *"  # 每3小时执行一次
+  workflow_dispatch:       # 允许手动触发
+
+jobs:
+  fetch-rss:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 安装依赖
+        run: pip install feedparser requests
+
+      - name: 推送最新文章
+        env:
+          CUBOX_API: ${{ secrets.CUBOX_API }}
+        run: |
+          python3 <<EOF
+          import os
+          import feedparser
+          import requests
+          from urllib.parse import quote
+
+          # 支持多个RSS源（2024优化版）
+          rss_list = [
+              ("https://rsshub.app/zhubai/luzhnan?limit=3", "Newsletter"),
+              ("https://rsshub.app/zhubai/other_id?limit=2", "Tech")
+          ]
+
+          for url, folder in rss_list:
+              feed = feedparser.parse(
+                  url,
+                  response_headers={'content-type': 'text/xml; charset=utf-8'}
+              )
+              for entry in feed.entries[:3]:  # 限制每个源最多3条
+                  payload = {
+                      "type": "url",
+                      "content": entry.link,
+                      "title": entry.title[:100],  # 标题截断防超长
+                      "folder": folder,
+                      "description": entry.description[:500] if hasattr(entry, 'description') else ""
+                  }
+                  response = requests.post(
+                      os.environ['CUBOX_API'],
+                      json=payload,
+                      headers={'User-Agent': 'Mozilla/5.0'}
+                  )
+                  print(f"Status: {response.status_code}, URL: {entry.link}")
+          EOF
