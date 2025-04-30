@@ -23,6 +23,7 @@ jobs:
 
           # 支持多个RSS源（2024优化版）
           rss_list = [
+              ("https://www.thisiscolossal.com/feed?limit=3", "Art"
               ("https://rsshub.app/zhubai/luzhnan?limit=3", "Newsletter"),
               ("https://rsshub.app/zhubai/other_id?limit=2", "Tech")
           ]
