@@ -1,7 +1,7 @@
 name: RSS to Cubox (时间戳优化版)
 on:
   schedule:
-    - cron: "0 8,14,20 * * *"
+    - cron: "0 8,12,18 * * *"
     # 优化配置（每天3次）
 
   workflow_dispatch:
