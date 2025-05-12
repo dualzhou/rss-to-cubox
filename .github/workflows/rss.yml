@@ -1,17 +1,30 @@
-name: RSS to Cubox
+name: RSS to Cubox (时间戳优化版)
 on:
   schedule:
-    - cron: "0 */3 * * *"  # 每3小时执行一次
-  workflow_dispatch:       # 允许手动触发
+    - cron: "0 8,14,20 * * *"
+    # 优化配置（每天3次）
+
+  workflow_dispatch:
 
 jobs:
   fetch-rss:
     runs-on: ubuntu-latest
     steps:
-      - name: 安装依赖
-        run: pip install feedparser requests
+      - name: 缓存时间戳
+        uses: actions/cache@v3
+        with:
+          path: last_run_time.txt
+          key: ${{ runner.os }}-timestamp-${{ hashFiles('​**​/rss_sources.txt') }}
 
-      - name: 推送最新文章
+      - name: 初始化时间戳
+        if: cache-hit != true
+        run: |
+          echo "1970-01-01 00:00:00" > last_run_time.txt
+
+      - name: 安装依赖
+        run: pip install feedparser requests pytz
+
+      - name: 推送新文章
         env:
           CUBOX_API: ${{ secrets.CUBOX_API }}
         run: |
@@ -19,15 +32,20 @@ jobs:
           import os
           import feedparser
           import requests
-          from urllib.parse import quote
+          from datetime import datetime, timezone
+          import time
+          import pytz
 
-          # 支持多个RSS源（2024优化版）
+          # 读取上次运行时间
+          with open('last_run_time.txt', 'r') as f:
+              last_run_time = datetime.strptime(f.read().strip(), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+
+          # 更新当前运行时间
+          current_run_time = datetime.now(timezone.utc)
+          
           rss_list = [
-              ("https://www.thisiscolossal.com/feed?limit=3", "Art"),
-              # ("https://rsshub.app/zhubai/luzhnan?limit=3", "Newsletter"),
-              # ("https://rsshub.app/zhubai/other_id?limit=3", "Tech"),
-              ("https://daringfireball.net/feeds/json?limit=3", "Tech"),
-              ("https://sspai.com/feed?limit=3", "Tech"),
+              ("https://rsshub.app/zhubai/luzhnan?limit=3", "Newsletter"),
+              ("https://rsshub.app/zhubai/other_id?limit=3", "Tech"),
           ]
 
           for url, folder in rss_list:
@@ -35,18 +53,30 @@ jobs:
                   url,
                   response_headers={'content-type': 'text/xml; charset=utf-8'}
               )
-              for entry in feed.entries[:3]:  # 限制每个源最多3条
-                  payload = {
-                      "type": "url",
-                      "content": entry.link,
-                      "title": entry.title[:100],  # 标题截断防超长
-                      "folder": folder,
-                      "description": entry.description[:500] if hasattr(entry, 'description') else ""
-                  }
-                  response = requests.post(
-                      os.environ['CUBOX_API'],
-                      json=payload,
-                      headers={'User-Agent': 'Mozilla/5.0'}
-                  )
-                  print(f"Status: {response.status_code}, URL: {entry.link}")
+              for entry in feed.entries:
+                  # 处理多格式时间戳（兼容RFC 822/RFC 3339）
+                  entry_time = datetime.fromtimestamp(
+                      time.mktime(entry.published_parsed), 
+                      tz=timezone.utc
+                  ) if hasattr(entry, 'published_parsed') else last_run_time
+
+                  if entry_time > last_run_time:
+                      payload = {
+                          "type": "url",
+                          "content": entry.link,
+                          "title": entry.title[:100],
+                          "folder": folder,
+                          "description": entry.description[:500] if hasattr(entry, 'description') else "",
+                          "tags": ["自动同步", entry_time.strftime("%Y-%m")]
+                      }
+                      response = requests.post(
+                          os.environ['CUBOX_API'],
+                          json=payload,
+                          headers={'User-Agent': 'Mozilla/5.0'}
+                      )
+                      print(f"Status: {response.status_code}, Time: {entry_time.isoformat()}")
+
+          # 写入新时间戳
+          with open('last_run_time.txt', 'w') as f:
+              f.write(current_run_time.strftime("%Y-%m-%d %H:%M:%S"))
           EOF
