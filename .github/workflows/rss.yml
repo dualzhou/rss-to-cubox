@@ -1,23 +1,26 @@
 name: RSS to Cubox (时间戳优化版)
 on:
   schedule:
-    - cron: "0 8,12,18 * * *"
-    # 优化配置（每天3次）
-
+    - cron: "0 */3 * * *"  # 每3小时执行一次
   workflow_dispatch:
 
 jobs:
   fetch-rss:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: 缓存时间戳
         uses: actions/cache@v3
+        id: time-cache
         with:
           path: last_run_time.txt
           key: ${{ runner.os }}-timestamp-${{ hashFiles('​**​/rss_sources.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-timestamp-
 
       - name: 初始化时间戳
-        if: cache-hit != true
+        if: steps.time-cache.outputs.cache-hit != 'true'
         run: |
           echo "1970-01-01 00:00:00" > last_run_time.txt
 
@@ -38,9 +41,11 @@ jobs:
 
           # 读取上次运行时间
           with open('last_run_time.txt', 'r') as f:
-              last_run_time = datetime.strptime(f.read().strip(), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+              try:
+                  last_run_time = datetime.strptime(f.read().strip(), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+              except ValueError:
+                  last_run_time = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
-          # 更新当前运行时间
           current_run_time = datetime.now(timezone.utc)
           
           rss_list = [
@@ -48,19 +53,25 @@ jobs:
               ("https://rsshub.app/zhubai/other_id?limit=3", "Tech"),
           ]
 
+          processed_entries = set()
           for url, folder in rss_list:
               feed = feedparser.parse(
                   url,
                   response_headers={'content-type': 'text/xml; charset=utf-8'}
               )
               for entry in feed.entries:
-                  # 处理多格式时间戳（兼容RFC 822/RFC 3339）
+                  # 处理多格式时间戳
                   entry_time = datetime.fromtimestamp(
                       time.mktime(entry.published_parsed), 
                       tz=timezone.utc
                   ) if hasattr(entry, 'published_parsed') else last_run_time
 
-                  if entry_time > last_run_time:
+                  # 组合唯一标识
+                  entry_id = f"{entry.link}-{entry_time.timestamp()}"
+                  
+                  if (entry_time > last_run_time) and (entry_id not in processed_entries):
+                      processed_entries.add(entry_id)
+                      
                       payload = {
                           "type": "url",
                           "content": entry.link,
