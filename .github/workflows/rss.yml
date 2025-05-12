@@ -1,7 +1,7 @@
 name: RSS to Cubox (时间戳优化版)
 on:
   schedule:
-    - cron: "0 */3 * * *"  # 每3小时执行一次
+    - cron: "0 8,12,18 * * *"  # 每天执行3次
   workflow_dispatch:
 
 jobs:
@@ -49,8 +49,11 @@ jobs:
           current_run_time = datetime.now(timezone.utc)
           
           rss_list = [
-              ("https://rsshub.app/zhubai/luzhnan?limit=3", "Newsletter"),
-              ("https://rsshub.app/zhubai/other_id?limit=3", "Tech"),
+              ("https://www.thisiscolossal.com/feed?limit=3", "Art"),
+              # ("https://rsshub.app/zhubai/luzhnan?limit=3", "Newsletter"),
+              # ("https://rsshub.app/zhubai/other_id?limit=3", "Tech"),
+              ("https://daringfireball.net/feeds/json?limit=3", "Tech"),
+              ("https://sspai.com/feed?limit=3", "Tech"),
           ]
 
           processed_entries = set()
